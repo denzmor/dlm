@@ -1,0 +1,23 @@
+---
+
+- name: Update parameter
+  uri:
+    force_basic_auth: yes
+    user: "{{ sat_api_user }}"
+    password: "{{ sat_api_password }}"
+    method: PUT
+    url: "{{ sat_url }}/api/v2/smart_class_parameters/{{ param_id }}/override_values/{{ param_override_id }}"
+    validate_certs: "{{ validate_certs }}"
+    body:
+      override_value:
+        match: "fqdn={{ host }}"
+        value: "{{ parameter_value }}"
+        use_puppet_default: false
+    body_format: json
+  register: put_sc_param_override
+  changed_when: " 'status' in put_sc_param_override and put_sc_param_override.status == 200 "
+  when: param_override.value != parameter_value or param_override.use_puppet_default != false
+
+- debug:
+    var: put_sc_param_override
+    verbosity: 1

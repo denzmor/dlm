@@ -1,0 +1,11 @@
+#- hosts: all                    # instead use --limit 'host' or --limit 'group'  2018-04-09 by Olivier Contant
+- hosts: "{{ host }}"
+  become: true
+  become_method: sudo  
+  gather_facts: yes             # Do we need gather_facts? This is known to cause host to hang and freeze the playbook on NFS timeout.  2018-04-09 by Olivier Contant
+
+  tasks:
+
+    - name: rear
+      shell: '/fixes/scripts/LINUX/rear/current-script-rear.sh SCHED'
+

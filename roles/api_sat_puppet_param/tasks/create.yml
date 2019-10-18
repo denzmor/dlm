@@ -1,0 +1,23 @@
+---
+
+- name: Create parameter
+  uri:
+    force_basic_auth: yes
+    user: "{{ sat_api_user }}"
+    password: "{{ sat_api_password }}"
+    method: POST
+    url: "{{ sat_url }}/api/v2/smart_class_parameters/{{ param_id }}/override_values"
+    validate_certs: "{{ validate_certs }}"
+    body:
+      override_value:
+        match: "fqdn={{ host }}"
+        value: "{{ parameter_value }}"
+        use_puppet_default: false
+    body_format: json
+    status_code: 201
+  register: post_sc_param_override
+  changed_when: " 'status' in post_sc_param_override and post_sc_param_override.status == 201 "
+
+- debug:
+    var: post_sc_param_override
+    verbosity: 1

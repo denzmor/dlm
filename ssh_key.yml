@@ -1,0 +1,54 @@
+#- hosts: all                    # instead use --limit 'host' or --limit 'group'  2018-04-09 by Olivier Contant
+- hosts: "{{ host }}"
+  become: true
+  become_method: sudo  
+  gather_facts: yes             # Do we need gather_facts? This is known to cause host to hang and freeze the playbook on NFS timeout.  2018-04-09 by Olivier Contant
+  vars:
+    config_lvm: true                                       # must be set to true in order to execute any tasks in play (failsafe option :)- )
+    create: true                                           # set to true if creating a new logical volume (do not set extend or resize to true)
+    jboss_devicename: '/dev/sdc'
+    create_vgname: 'jbossvg'                               # set to volume group name to create
+    filesystem: 'ext4'                                      # set to filesystem type to format new logical volume with ( ext3, ext4, xfs, etc. )
+    optjboss_size: 200G
+    opttomcat_size: 10G
+    web_size: 20G
+    logswas_size: 20G
+    dump_size: 10G
+    optibm_size: 10G
+    adapter: ens224
+    gateway: 10.216.57.1
+
+
+  tasks:
+
+
+    - name: copy files
+      copy:
+        src: "{{ item.source }}"
+        dest: "{{ item.destination }}"
+        mode: 0664
+        owner: root
+        group: root
+      with_items:
+        - { source: '/cnunix/integ/ansible/JBOSS/script/id_rsa.pub', destination: '/home/infa/.ssh/id_rsa.pub' }
+        - { source: '/cnunix/integ/ansible/JBOSS/script/id_rsa', destination: '/home/infa/.ssh/id_rsa' }
+        - { source: '/cnunix/integ/ansible/JBOSS/script/known_hosts', destination: '/home/infa/.ssh/known_hosts' }
+        - { source: '/cnunix/integ/ansible/JBOSS/script/authorized_keys', destination: '/home/infa/.ssh/authorized_keys' }
+      ignore_errors: yes
+
+
+
+
+    - name: commands
+      shell: "{{ item }}"
+      with_items:
+        - 'chmod 640 /home/infa/.ssh/id_rsa.pub'
+        - 'chown infa.infa /home/infa/.ssh/id_rsa.pub'
+        - 'chmod 600 /home/infa/.ssh/id_rsa'
+        - 'chmod 640 /home/infa/.ssh/authorized_keys'
+        - 'chown infa.infa /home/infa/.ssh/id_rsa'
+        - 'chown infa.infa /home/infa/.ssh/authorized_keys'
+        - 'chmod 644 /home/infa/.ssh/known_hosts'
+        - 'chown infa.infa /home/infa/.ssh/known_hosts'
+      ignore_errors: yes
+

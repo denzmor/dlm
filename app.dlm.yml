@@ -1,0 +1,298 @@
+- hosts: "{{ host }}"
+  become: true
+  become_method: sudo  
+  gather_facts: yes             # Do we need gather_facts? This is known to cause host to hang and freeze the playbook on NFS timeout.  2018-04-09 by Olivier Contant
+  vars:
+    app_devicename: '/dev/sdc'
+    create_vgname: 'appvg'                               # set to volume group name to create
+    filesystem: 'ext4'                                      # set to filesystem type to format new logical volume with ( ext3, ext4, xfs, etc. )
+    optapp_size: 100G
+    optibm_size: 5G
+    dump_size: 10G
+    edcuser: edl-edlsbx-datlk
+    edcgroup: edl-edlsbx-datlk-genids-full 
+    env: "{{ inventory_hostname[7:10] }}"
+  tasks:
+
+    - debug:
+        msg: "{{ env }}"
+
+    - parted:
+        device: "{{ item.devicename }}"
+        number: 1
+        flags: [ lvm ]
+        label: gpt
+        state: present
+        unit: MiB
+      with_items:
+        - { devicename: '{{ app_devicename }}' }
+      when: env != 'nte' and env != 'wrk' and  env != 'msr'
+
+
+    - name: creating new LVM volume group
+      lvg: vg={{ create_vgname }} pvs={{ app_devicename }}1 state=present
+      when: env != 'wrk' and  env != 'msr'
+
+    - name: creating new LVM logical volume
+      lvol: vg={{ create_vgname }} lv={{ item.lvname }} size={{ item.size }}
+      with_items:
+        - { lvname: 'optinformaticalv', size: '{{ optapp_size }}', mntp: '/opt/informatica' }
+        - { lvname: 'dumplv', size: '{{ dump_size }}', mntp: '/dump' }
+        - { lvname: 'optibmlv', size: '{{ optibm_size }}', mntp: '/opt/ibm' }
+      when: env != 'nte' and env != 'wrk' and  env != 'msr'
+
+    - name: creating new filesystem on new LVM logical volume
+      filesystem: fstype={{ filesystem }} dev=/dev/{{ create_vgname }}/{{ item.lvname }}
+      with_items:
+        - { lvname: 'optinformaticalv', size: '{{ optapp_size }}', mntp: '/opt/informatica' }
+        - { lvname: 'dumplv', size: '{{ dump_size }}', mntp: '/dump' }
+        - { lvname: 'optibmlv', size: '{{ optibm_size }}', mntp: '/opt/ibm' }
+      when: env != 'nte' and env != 'wrk' and  env != 'msr'
+
+    - name: mounting new filesystem
+      mount: name={{ item.mntp }} src=/dev/{{ create_vgname }}/{{ item.lvname }} fstype={{ filesystem }} state=mounted
+      with_items:  
+        - { lvname: 'optinformaticalv', size: '{{ optapp_size }}', mntp: '/opt/informatica' }
+        - { lvname: 'dumplv', size: '{{ dump_size }}', mntp: '/dump' }
+        - { lvname: 'optibmlv', size: '{{ optibm_size }}', mntp: '/opt/ibm' }
+      when: env != 'nte' and env != 'wrk' and  env != 'msr'
+
+    - name: creating new LVM logical volume
+      lvol: vg={{ create_vgname }} lv={{ item.lvname }} size={{ item.size }}
+      with_items:
+        - { lvname: 'optinformaticalv', size: '40G', mntp: '/opt/informatica' }
+      when: env == 'nte'
+ 
+    - name: creating new filesystem on new LVM logical volume
+      filesystem: fstype={{ filesystem }} dev=/dev/{{ create_vgname }}/{{ item.lvname }}
+      with_items:
+        - { lvname: 'optinformaticalv', size: '40G', mntp: '/opt/informatica' }
+      when: env == 'nte'
+
+    - name: mounting new filesystem
+      mount: name={{ item.mntp }} src=/dev/{{ create_vgname }}/{{ item.lvname }} fstype={{ filesystem }} state=mounted
+      with_items:
+        - { lvname: 'optinformaticalv', size: '40G', mntp: '/opt/informatica' }
+      when: env == 'nte'
+
+
+    - name:
+      shell: lvresize -L '{{ item.size }}' /dev/{{ item.vgname }}/{{ item.lvname }}
+      with_items:
+        - { lvname: 'varlv', size: '5.99G', vgname: 'rootvg'  }
+        - { lvname: 'varloglv', size: '4.99G', vgname: 'rootvg'  }
+        - { lvname: 'rootlv', size: '20G', vgname: 'rootvg'  }
+      when: env == 'msr' or env == 'wrk'
+      ignore_errors: yes
+
+
+    - name:
+      shell: resize2fs /dev/{{ item.vgname }}/{{ item.lvname }}
+      with_items:
+        - { lvname: 'varlv', size: '5.99G', vgname: 'rootvg'  }
+        - { lvname: 'varloglv', size: '4.99G', vgname: 'rootvg'  }
+        - { lvname: 'rootlv', size: '20G', vgname: 'rootvg'  }
+      when: env == 'msr' or env == 'wrk'
+      ignore_errors: yes
+
+    - name: activate repo
+      shell: /cnunix/integ/ansible/SAP/scripts/enable_repo
+      ignore_errors: yes
+    
+    - name: install rpm  prereq
+      yum: package={{ item }} state=present
+      with_items:
+            - CnAdminMenu 
+            - mlocate
+            - java-1.8.0-openjdk-devel
+            - java-1.8.0-openjdk
+            - unzip
+            - nc
+            - tcsh
+            - glibc.i686
+            - mlocate
+            - rpm-build
+            - compat-libstdc++-33-3.2.3-71.el7.x86_64
+            - kernel-headers
+            - kernel-devel
+            - snappy-devel
+            - libtirpc-devel
+            - redhat-lsb
+            - python-devel
+            - apr
+            - apr-util
+            - yajl
+
+    - name: copy vip.sh
+      copy:
+        src: /cnunix/integ/ansible/DLM/script/vip.sh
+        dest: /usr/local/bin/vip.sh
+
+    - name: Net Share mount point configuration
+      mount: name='/nas/db2software' src='mtlhqc0db200p.cn.ca:/mtlhqc0db200p_udb_db2software_rp' fstype='nfs' opts='rw,soft,timeo=600,bg,intr,retry=3,rsize=4096,wsize=4096' state='mounted'
+      ignore_errors: yes
+
+
+    - name: Net Share mount point configuration
+      mount: name='/net/share' src='mtlhqc0nas00p.cn.ca:/mtlhqc0nas00p_netshare_prd' fstype='nfs' opts='rw,soft,timeo=600,bg,intr,retry=3,rsize=4096,wsize=4096' state='mounted'
+
+    - name: EDC repo
+      mount: name='/cn/EDC_repo' src='mtlhqc0nas00p:/mtlhqc0nas00p_EDC_repo' fstype='nfs' opts='rw,soft,timeo=600,bg,intr,retry=3,rsize=4096,wsize=4096' state='mounted'
+      ignore_errors: yes
+
+    - name: dump
+      file: path=/dump group={{ edcgroup }} mode=2775
+      when: env != 'nte' and env != 'wrk' and  env != 'msr'
+ 
+    - name: net
+      file: path=/net mode=0775  
+    
+    - name: share
+      file: path=/net/share group={{ edcgroup }} mode=0775
+      ignore_errors: yes
+
+    - name: optinformatica
+      file: path=/opt/informatica state=directory owner={{ edcuser }} group={{ edcgroup }} mode=2775
+
+
+    - name: etcsecuritylimits.dinformatica
+      file: path=/etc/security/limits.d/informatica.conf state=touch owner=root group=root mode=0664
+    
+    - name: remove rhnsd
+      yum:
+        name: rhnsd
+        state: absent
+
+    - name: insert dlm sysctl prereq
+      blockinfile:
+         name: /etc/sysctl.conf
+         block: |
+           net.core.netdev_max_backlog=300000
+           net.core.somaxconn=3000
+           net.ipv4.tcp_keepalive_intvl=15
+           net.ipv4.tcp_keepalive_probes=5
+           fs.file-max=512000 #for 16 processes
+
+    - name: insert nofile
+      blockinfile:
+         name: /etc/security/limits.d/informatica.conf
+         insertbefore: "# End of file"
+         block: |
+           # - stack - maximum stack size (KB) - requirements for app and tomcat 
+           {{ edcuser }} soft stack 32768
+           {{ edcuser }} hard stack 32768
+           # - nofile - maximum number of open files
+           {{ edcuser }} soft nofile 65536
+           {{ edcuser }} hard nofile 65536
+           # - fsize - maximum file size
+           {{ edcuser }} soft fsize unlimited
+           {{ edcuser }} hard fsize unlimited
+           # - nproc - maximum of number of processes
+           {{ edcuser }} soft    nproc          32768
+           {{ edcuser }} hard    nproc          32768
+           # - HARD CORE UNLIMITED
+           {{ edcuser }} hard core unlimited
+           * hard core unlimited
+
+    - name: adminmenu
+      file: src=/home/prog/admin dest=/usr/local/bin/admin state=link
+
+    - name: ns
+      shell: cd /usr/local/bin; ln -s /cnunix/LINUX/integ/bin/ns ns
+      ignore_errors: yes
+
+    - name: copy files
+      copy:
+        src: "{{ item.source }}"
+        dest: "{{ item.destination }}"
+        mode: 0664
+        owner: root
+        group: root
+      with_items:
+        - { source: '/cnunix/integ/ansible/DLM/script/dlm', destination: '/etc/sudoers.d/dlm' }
+
+    - replace:
+        path: "/etc/sudoers.d/dlm"
+        regexp: '{{ item.regexp }}'
+        replace: '{{ item.replace }}'
+      with_items:
+       - { regexp: 'infa', replace: '{{ edcuser }}' }
+
+    - name: commands
+      shell: "{{ item }}"
+      with_items:
+        - 'chmod 640 /etc/sudoers.d/dlm'
+        - 'su - {{ edcuser }} -l -c /usr/bin/ls'
+        - "su - {{ edcuser }} -c 'mkdir -p -m 700 /home/{{ edcuser }}/.ssh'"
+        - "su - {{ edcuser }} -c 'mkdir -p -m 775 /opt/informatica/10.2.2/services/shared/security/'"
+
+      ignore_errors: yes
+
+    - name: copy files
+      copy:
+        src: "{{ item.source }}"
+        dest: "{{ item.destination }}"
+        mode: 0664
+        owner: root
+        group: root
+      with_items:
+        - { source: '/cnunix/integ/ansible/JBOSS/script/id_rsa.pub', destination: '/home/{{ edcuser }}/.ssh/id_rsa.pub' }
+        - { source: '/cnunix/integ/ansible/JBOSS/script/id_rsa', destination: '/home/{{ edcuser }}/.ssh/id_rsa' }
+        - { source: '/cnunix/integ/ansible/JBOSS/script/known_hosts', destination: '/home/{{ edcuser }}/.ssh/known_hosts' }
+        - { source: '/cnunix/integ/ansible/JBOSS/script/authorized_keys', destination: '/home/{{ edcuser }}/.ssh/authorized_keys' }
+      ignore_errors: yes
+
+
+    - name: commands
+      shell: "{{ item }}"
+      with_items:
+        - 'chmod 640 /home/{{ edcuser }}/.ssh/id_rsa.pub'
+        - 'chown {{ edcuser }}.{{ edcgroup }} /home/{{ edcuser }}/.ssh/id_rsa.pub'
+        - 'chmod 600 /home/{{ edcuser }}/.ssh/id_rsa'
+        - 'chmod 640 /home/{{ edcuser }}/.ssh/authorized_keys'
+        - 'chown {{ edcuser }}.{{ edcgroup }} /home/{{ edcuser }}/.ssh/id_rsa'
+        - 'chown {{ edcuser }}.{{ edcgroup }} /home/{{ edcuser }}/.ssh/authorized_keys'
+        - 'chmod 644 /home/{{ edcuser }}/.ssh/known_hosts'
+        - 'chown {{ edcuser }}.{{ edcgroup }} /home/{{ edcuser }}/.ssh/known_hosts'
+        - 'chown {{ edcuser }}.{{ edcgroup }} /opt/informatica/10.2.2/services/shared/security/'
+        - 'cp /cnunix/integ/ansible/DLM/script/krb5.conf /opt/informatica/10.2.2/services/shared/security/'
+        - 'chown {{ edcuser }}.{{ edcgroup }} /opt/informatica/10.2.2/services/shared/security/krb5.conf'
+        - 'service sshd restart'
+      ignore_errors: yes
+
+    - name: Set HOSTNAME to sysconfig Network file
+      lineinfile:
+        path: /etc/sysconfig/network
+        line: HOSTNAME={{ inventory_hostname }}.cn.ca
+
+    - puppet:
+        timeout: 5m
+      ignore_errors: yes
+
+    - name: insert noop for puppet
+      blockinfile:
+         name: /etc/puppet/puppet.conf
+         block: |
+           noop = true
+
+#will take effect after the reboot
+#    - name: Restart puppet
+#      service:
+#        name: puppet
+#        state: restarted
+
+
+###################################################################
+##  Installing esp from another playbook
+#######################################################################
+
+- import_playbook: /cnunix/integ/ansible/ESP/espagent-install.yml host={{ inventory_hostname }}
+
+
+###################################################################
+##  Installing oracle client from another playbook
+######################################################################
+
+- import_playbook: /cnunix/integ/ansible/Oracle_inst_client/app.oracle.client.yml host={{ inventory_hostname }}
+
+- import_playbook: /cnunix/integ/ansible/Oracle_Full_Client/app.oracle.client.yml host={{ inventory_hostname }}

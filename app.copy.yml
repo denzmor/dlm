@@ -1,0 +1,47 @@
+- hosts: "{{ host }}"
+  become: true
+  become_method: sudo  
+  gather_facts: yes             # Do we need gather_facts? This is known to cause host to hang and freeze the playbook on NFS timeout.  2018-04-09 by Olivier Contant
+  vars:
+    app_devicename: '/dev/sdc'
+    create_vgname: 'appvg'                               # set to volume group name to create
+    filesystem: 'ext4'                                      # set to filesystem type to format new logical volume with ( ext3, ext4, xfs, etc. )
+    optapp_size: 100G
+    optibm_size: 5G
+    dump_size: 10G
+    edcuser: edl-edlsbx-datlk
+    edcgroup: edl-edlsbx-datlk-genids-full 
+    env: "{{ inventory_hostname[7:10] }}"
+  tasks:
+
+    - name: copy files
+      copy:
+        src: "/cnunix/integ/ansible/DLM/script/edl-edlsbx-edc.keytab"
+        dest: "/otds/platform/keytabs/edl-edlsbx-edc.keytab"
+        mode: 0664
+        owner: root
+        group: root
+
+    - name: commands
+      shell: "{{ item }}"
+      with_items:
+       - 'chmod 775 /otds'
+       - 'chmod 775 /otds/platform'
+       - 'chmod 775 /otds/platform/keytabs'
+      ignore_errors: yes
+
+
+    - name: insert nofile
+      lineinfile:
+         name: /etc/krb5.conf
+         #regexp: '^\[libdefaults\]'
+         insertafter: '^\[libdefaults\]'
+         line: '  udp_preference_limit = 1'
+
+    - name: commands
+      shell: "{{ item }}"
+      with_items:
+       - 'service sssd restart'
+      ignore_errors: yes
+
+

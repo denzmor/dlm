@@ -1,0 +1,48 @@
+- hosts: localhost 
+  become: true
+  become_method: sudo  
+  gather_facts: yes   
+  vars:
+    adapter: ens224
+    gateway: 10.216.57.1
+    ansible_password: XXXXXX
+#  vars_prompt:
+#    - name: 'ansible_password'
+#      prompt: "Enter your Satelitte password"
+#      private: yes
+
+
+  tasks:
+
+#    - include_role:
+#        name: api_sat_puppet_param
+#      vars:
+#        validate_certs: no
+#        host: "{{ host }}"
+#        puppetclass_name: cn_authentication
+#        parameter_name: sudoers_include_d
+#        parameter_value: true
+#        override: yes
+
+    - debug:
+        msg: "{{ server }}"
+    - include_role:
+        name: api_sat_puppet_param
+      vars:
+        validate_certs: no
+        host: "{{ server }}.cn.ca"
+        puppetclass_name: cn_netbackup
+        parameter_name: interface
+        parameter_value: ens224
+        override: yes
+
+    - include_role:
+        name: api_sat_puppet_param
+      vars:
+        validate_certs: no
+        host: "{{ server }}.cn.ca"
+        puppetclass_name: cn_netbackup
+        parameter_name: gateway
+        parameter_value: 10.217.22.1
+        override: yes
+

@@ -1,0 +1,25 @@
+---
+galaxy_info:
+  author: Marco Ponton
+  description: This Ansible role creates, updates or deletes a Puppet parameter override for a host on a Satellite server
+  company: CN Rail
+
+  issue_tracker_url:
+
+  license: CN Internal
+
+  min_ansible_version: 2.4
+
+  # https://galaxy.ansible.com/api/v1/platforms/
+  # Cheating here. This runs anywhere but requires a "Satellite v6 API"
+  platforms:
+    - name: Satellite6
+
+  galaxy_tags:
+    - module
+    - cn
+    - satellite
+    - foreman
+    - puppet
+
+dependencies: []

@@ -1,0 +1,26 @@
+---
+
+# MANDATORY: User and password to use to authenticate to the Satellite API (default is to use the Ansible user/pw)
+sat_api_user: "{{ ansible_user }}"
+sat_api_password: "{{ ansible_password }}"
+
+# MANDATORY: Satellite server URL (i.e. http(s)://hostname.domain.tld)
+sat_url: https://mtl-sat02p.cn.ca
+
+# MANDATORY: FQDN of host on which to set/update/delete parameter (e.g. mtl-ptcdev01d.cn.ca)
+# host:
+
+# MANDATORY: Puppet class name (e.g. cn_nscd)
+# puppetclass_name:
+
+# MANDATORY: Namr of parameter (e.g. service_running)
+# parameter_name:
+
+# MANDATORY: Value of parameter (e.g. stopped)
+# parameter_value:
+
+# If true, parameter is created or updated to override Puppet defaults, if false, parameter is deleted
+override: yes
+
+# If set to no, Satellite SSL certificate will not be validated
+validate_certs: yes

@@ -1,0 +1,47 @@
+#- hosts: all                    # instead use --limit 'host' or --limit 'group'  2018-04-09 by Olivier Contant
+- hosts: "{{ host }}"
+  become: true
+  become_method: sudo  
+  gather_facts: yes             # Do we need gather_facts? This is known to cause host to hang and freeze the playbook on NFS timeout.  2018-04-09 by Olivier Contant
+  vars:
+    edcuser: edl-edlprd-datlk
+    edcgroup: edl-edlprd-datlk-genids-full
+
+
+  tasks:
+
+    - name: commands
+      shell: "{{ item }}"
+      with_items:
+        - 'su - {{ edcuser }} -l -c /usr/bin/ls'
+        - "su - {{ edcuser }} -c 'mkdir -p -m 700 /home/{{ edcuser }}/.ssh'"
+
+    - name: copy files
+      copy:
+        src: "{{ item.source }}"
+        dest: "{{ item.destination }}"
+        mode: 0664
+        owner: root
+        group: root
+      with_items:
+        - { source: '/cnunix/integ/ansible/JBOSS/script/id_rsa.pub', destination: '/home/{{ edcuser }}/.ssh/id_rsa.pub' }
+        - { source: '/cnunix/integ/ansible/JBOSS/script/id_rsa', destination: '/home/{{ edcuser }}/.ssh/id_rsa' }
+        - { source: '/cnunix/integ/ansible/JBOSS/script/known_hosts', destination: '/home/{{ edcuser }}/.ssh/known_hosts' }
+        - { source: '/cnunix/integ/ansible/JBOSS/script/authorized_keys', destination: '/home/{{ edcuser }}/.ssh/authorized_keys' }
+      ignore_errors: yes
+
+
+    - name: commands
+      shell: "{{ item }}"
+      with_items:
+        - 'chmod 640 /home/{{ edcuser }}/.ssh/id_rsa.pub'
+        - 'chown {{ edcuser }}.{{ edcgroup }} /home/{{ edcuser }}/.ssh/id_rsa.pub'
+        - 'chmod 600 /home/{{ edcuser }}/.ssh/id_rsa'
+        - 'chmod 640 /home/{{ edcuser }}/.ssh/authorized_keys'
+        - 'chown {{ edcuser }}.{{ edcgroup }} /home/{{ edcuser }}/.ssh/id_rsa'
+        - 'chown {{ edcuser }}.{{ edcgroup }} /home/{{ edcuser }}/.ssh/authorized_keys'
+        - 'chmod 644 /home/{{ edcuser }}/.ssh/known_hosts'
+        - 'chown {{ edcuser }}.{{ edcgroup }} /home/{{ edcuser }}/.ssh/known_hosts'
+      ignore_errors: yes
+
+

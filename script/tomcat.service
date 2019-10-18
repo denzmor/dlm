@@ -1,0 +1,13 @@
+[Unit]
+Description=Tomcat
+After=syslog.target network.target
+
+[Service]
+Type=simple
+User=tomcat
+ExecStart=/bin/bash /opt/tomcat/bin/startAll.sh
+ExecStop=/bin/bash /opt/tomcat/bin/stopAll.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,66 @@
+---
+
+- name: Query API for SmartClass parameter ID
+  uri:
+    force_basic_auth: yes
+    user: "{{ sat_api_user }}"
+    password: "{{ sat_api_password }}"
+    method: GET
+    url: "{{ sat_url }}/api/v2/smart_class_parameters?search=puppetclass_name={{ puppetclass_name | urlencode }}+parameter={{ parameter_name | urlencode }}"
+    validate_certs: "{{ validate_certs }}"
+  register: get_sc_param
+  check_mode: no
+
+- debug:
+    var: get_sc_param
+    verbosity: 1
+
+- name: Fail if more or less than one matching entry is found
+  fail:
+    msg: Unexpected number of results ({{ get_sc_param.json.subtotal }}) in API response
+  when: get_sc_param.json.subtotal != 1
+
+- name: Extract parameter ID
+  set_fact:
+    param_id: "{{ get_sc_param.json.results[0].id }}"
+
+- name: Query API for current settings
+  uri:
+    force_basic_auth: yes
+    user: "{{ sat_api_user }}"
+    password: "{{ sat_api_password }}"
+    method: GET
+    #JL: Adding 10K per page since we have large payloads from sat
+    url: "{{ sat_url }}/api/v2/smart_class_parameters/{{ param_id }}/override_values?per_page=10000"
+    validate_certs: "{{ validate_certs }}"
+  register: get_sc_param_override
+  check_mode: no
+
+- debug:
+    var: get_sc_param_override
+    verbosity: 1
+
+- name: Extract matching overrides
+  set_fact:
+    overrides: "{{ get_sc_param_override.json.results | selectattr('match', 'match', '^fqdn=' + host + '$') | list }}"
+    param_override: null
+    param_override_id: null
+    operation: "{{ override | ternary('create','delete') }}"
+
+- debug:
+    var: overrides
+    verbosity: 2
+
+- name: Extract current value
+  set_fact:
+    param_override: "{{ overrides[0] }}"
+    param_override_id: "{{ overrides[0].id }}"
+    operation: "{{ override | ternary('update','delete') }}"
+  when: overrides | length > 0
+
+- debug:
+    var: param_override
+    verbosity: 1
+
+- name: Including tasks needed for {{ operation }} operation
+  include_tasks: "{{ operation }}.yml"

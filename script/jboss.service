@@ -1,0 +1,13 @@
+[Unit]
+Description=JBoss
+After=syslog.target network.target
+
+[Service]
+Type=simple
+User=jboss
+ExecStart=/bin/bash /opt/jboss/bin/startAll.sh
+ExecStop=/bin/bash /opt/jboss/bin/stopAll.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

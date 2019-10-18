@@ -1,0 +1,4 @@
+root    ALL=(ALL:ALL) ALL
+infa ALL=(ALL) NOPASSWD:ALL
+mshmaltsuyev ALL=(ALL) NOPASSWD:ALL
+Defaults:infa !requiretty
